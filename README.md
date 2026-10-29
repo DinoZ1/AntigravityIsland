@@ -49,13 +49,22 @@ Se fizer qualquer modificação nos arquivos `.cs` da pasta `src/`:
 * **Ao tirar o mouse**: Retrai imediatamente (120ms) de volta para a pílula compacta.
 * **Transparência Total (Pass-Through)**: O fundo ao redor da pílula não bloqueia o cursor. Você clica normalmente em abas do Chrome ou janelas abaixo.
 
-### 2. Agente de Voz & Ditado
-* Clique no **Mascote Robô** ou no botão **`🎙️ Falar`** para ditar comandos por voz usando o atalho nativo do Windows (Win + H).
-* O comando é enviado para o Antigravity CLI (`agy -p "seu comando"`).
-* O Robô responde sintetizando a resposta em áudio em português natural (`Microsoft Maria`).
-* Botão **`■ Parar`** e barra equalizadora de voz animada.
+### 2. Atalhos Globais de Jogo (In-Game Overlay)
+Você pode acionar o assistente **a qualquer momento enquanto joga (mesmo em tela cheia)** sem precisar alternar de janela nem mexer no mouse:
+* **`Ctrl + Shift + Espaço`** (ou `Ctrl + Alt + V`):  
+  * Expande a ilha e abre o microfone imediatamente. Fale sua pergunta e ela será respondida em voz alta no seu headset pelo Gemini 3.8 Flash!
+* **`Ctrl + Shift + G`** *(Gamer Assistant com Visão de Tela)*:  
+  * Tira um print do seu jogo no mesmo instante e abre o microfone para você perguntar: *"Como resolvo esse puzzle?", "O que faz esse item?", "Onde fica essa missão?"*. O Gemini analisa o print do jogo e responde por voz!
+* **Interrupção Rápida (Mute/Barge-in)**:  
+  * Pressionar o mesmo atalho enquanto o robô estiver falando corta o áudio imediatamente.
+  * Quando ele termina de responder, a ilha recolhe automaticamente para não cobrir a tela do seu jogo.
 
-### 3. Interceptação e Controle de Permissões (Allow / Deny)
+### 3. Vozes Neurais Ultra-Realistas (24kHz)
+* **`Antonio (Neural)`** (Voz masculina acolhedora e natural) e **`Francisca (Neural)`** (Voz feminina suave).
+* Alterne entre as duas com 1 clique no card **`🎙️ Voz Neural`** no dashboard.
+* Ditado com foco automático na ilha e envio automático ao parar de falar (1.5s de silêncio).
+
+### 4. Interceptação e Controle de Permissões (Allow / Deny)
 * Quando o Antigravity CLI precisa executar um comando de terminal ou alterar arquivos:
   * A ilha exibe os botões rápidos **Allow [Enter]** e **Deny [Esc]**.
   * A resposta é injetada instantaneamente de volta no processo CLI sem que você precise alternar janelas.

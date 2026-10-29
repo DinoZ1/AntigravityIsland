@@ -73,6 +73,7 @@ namespace AntigravityIsland.UI
         private int _focusRemainingSeconds = 25 * 60; // 25:00
         private bool _focusRunning = false;
         private bool _isExpanded = false;
+        private string _pendingScreenCapture = null;
 
         private Action<bool, string> _currentPermissionCallback;
         private ToolPermissionRequest _currentRequest;
@@ -132,6 +133,104 @@ namespace AntigravityIsland.UI
             base.OnSourceInitialized(e);
             IntPtr hwnd = new WindowInteropHelper(this).Handle;
             NativeWin32.MakeNonActivating(hwnd);
+
+            // Registra Hotkeys Globais (funcionam em tela cheia durante jogos e qualquer aplicativo):
+            // 1001: Ctrl + Shift + Espaço (Voz rápida / In-Game Assistant)
+            NativeWin32.RegisterHotKey(hwnd, 1001, NativeWin32.MOD_CONTROL | NativeWin32.MOD_SHIFT | NativeWin32.MOD_NOREPEAT, NativeWin32.VK_SPACE);
+
+            // 1002: Ctrl + Shift + G (Game Assistant: captura tela do jogo + microfone)
+            NativeWin32.RegisterHotKey(hwnd, 1002, NativeWin32.MOD_CONTROL | NativeWin32.MOD_SHIFT | NativeWin32.MOD_NOREPEAT, NativeWin32.VK_G);
+
+            // 1003: Ctrl + Alt + V (Voz com uma mão)
+            NativeWin32.RegisterHotKey(hwnd, 1003, NativeWin32.MOD_CONTROL | NativeWin32.MOD_ALT | NativeWin32.MOD_NOREPEAT, NativeWin32.VK_V);
+
+            HwndSource source = HwndSource.FromHwnd(hwnd);
+            if (source != null)
+            {
+                source.AddHook(HwndHook);
+            }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                NativeWin32.UnregisterHotKey(hwnd, 1001);
+                NativeWin32.UnregisterHotKey(hwnd, 1002);
+                NativeWin32.UnregisterHotKey(hwnd, 1003);
+            }
+            catch { }
+            base.OnClosed(e);
+        }
+
+        private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == NativeWin32.WM_HOTKEY)
+            {
+                int hotkeyId = wParam.ToInt32();
+                if (hotkeyId == 1001 || hotkeyId == 1003)
+                {
+                    handled = true;
+                    OnGameVoiceHotkeyTriggered(false);
+                }
+                else if (hotkeyId == 1002)
+                {
+                    handled = true;
+                    OnGameVoiceHotkeyTriggered(true); // com captura de tela do jogo
+                }
+            }
+            return IntPtr.Zero;
+        }
+
+        private void OnGameVoiceHotkeyTriggered(bool captureScreen)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                // Se o robô estiver falando enquanto você joga, apertar o atalho corta a fala na hora (Mute/Barge-in)
+                if (_voiceAgent != null && _voiceAgent.IsSpeaking)
+                {
+                    _voiceAgent.StopSpeaking();
+                    return;
+                }
+
+                // Se a caixa de voz já estiver aberta, cancela e recolhe a ilha
+                if (_voiceInputBox.Visibility == Visibility.Visible)
+                {
+                    _voiceSilenceTimer.Stop();
+                    _voiceInputBox.Visibility = Visibility.Collapsed;
+                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                    NativeWin32.MakeNonActivating(hwnd);
+                    AnimateToPill();
+                    return;
+                }
+
+                AnimateToDashboard();
+
+                if (captureScreen)
+                {
+                    try
+                    {
+                        _pendingScreenCapture = ScreenCapture.Capture(false);
+                        _terminalCodeLine1.Text = "$ agy (🎮 Game Assistant)";
+                        _terminalCodeLine2.Text = "Tela do jogo capturada! Fale sua dúvida sobre o jogo...";
+                    }
+                    catch
+                    {
+                        _pendingScreenCapture = null;
+                        _terminalCodeLine1.Text = "$ agy (🎮 Game Assistant)";
+                        _terminalCodeLine2.Text = "Fale sua dúvida sobre o jogo...";
+                    }
+                }
+                else
+                {
+                    _pendingScreenCapture = null;
+                    _terminalCodeLine1.Text = "$ agy (🎮 In-Game Voice)";
+                    _terminalCodeLine2.Text = "Ouvindo você... (o envio será automático)";
+                }
+
+                StartVoiceInputMode();
+            });
         }
 
         private void InitTimers()
@@ -947,16 +1046,25 @@ namespace AntigravityIsland.UI
             IntPtr hwnd = new WindowInteropHelper(this).Handle;
             NativeWin32.MakeNonActivating(hwnd);
 
-            // Se o usuário mencionar a tela, captura contexto visual automaticamente
-            string lowerPrompt = prompt.ToLower();
-            if (lowerPrompt.Contains("tela") || lowerPrompt.Contains("print") || lowerPrompt.Contains("screenshot") || lowerPrompt.Contains("veja") || lowerPrompt.Contains("olha"))
+            // Se houver captura pendente disparada pelo atalho de jogo (Ctrl+Shift+G)
+            if (!string.IsNullOrEmpty(_pendingScreenCapture))
             {
-                try
+                prompt += string.Format(" (Contexto visual do jogo capturado em: {0})", _pendingScreenCapture);
+                _pendingScreenCapture = null;
+            }
+            else
+            {
+                // Se o usuário mencionar a tela, captura contexto visual automaticamente
+                string lowerPrompt = prompt.ToLower();
+                if (lowerPrompt.Contains("tela") || lowerPrompt.Contains("print") || lowerPrompt.Contains("screenshot") || lowerPrompt.Contains("veja") || lowerPrompt.Contains("olha"))
                 {
-                    string screenPath = ScreenCapture.Capture(false);
-                    prompt += string.Format(" (Contexto visual da tela capturado em: {0})", screenPath);
+                    try
+                    {
+                        string screenPath = ScreenCapture.Capture(false);
+                        prompt += string.Format(" (Contexto visual da tela capturado em: {0})", screenPath);
+                    }
+                    catch { }
                 }
-                catch { }
             }
 
             SetState(AgentStatus.Thinking, "Gemini pensando...");
@@ -1000,6 +1108,14 @@ namespace AntigravityIsland.UI
                 {
                     _roboAntennaBulb.Fill = new SolidColorBrush(Color.FromRgb(16, 185, 129));
                     _roboAntennaBulb.Effect = new DropShadowEffect { Color = Color.FromRgb(16, 185, 129), BlurRadius = 8, ShadowDepth = 0 };
+                }
+
+                // Se o usuário estiver jogando (cursor fora da ilha), retrai suavemente para não cobrir o jogo
+                if (!_islandBorder.IsMouseOver)
+                {
+                    _autoCollapseTimer.Stop();
+                    _autoCollapseTimer.Interval = TimeSpan.FromMilliseconds(1000);
+                    _autoCollapseTimer.Start();
                 }
             });
         }
