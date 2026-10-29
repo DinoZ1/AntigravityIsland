@@ -53,7 +53,7 @@ namespace AntigravityIsland.Services
                 ProcessStartInfo psi = new ProcessStartInfo
                 {
                     FileName = agyExe,
-                    Arguments = string.Format("{0} -p \"{1}\"", continueConversation ? "-c" : "", prompt.Replace("\"", "\\\"")),
+                    Arguments = string.Format("{0} --model gemini-3.8-flash-low -p \"{1}\"", continueConversation ? "-c" : "", prompt.Replace("\"", "\\\"")),
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,

@@ -65,6 +65,7 @@ namespace AntigravityIsland.UI
         private DispatcherTimer _focusTimer;
         private DispatcherTimer _autoCollapseTimer;
         private DispatcherTimer _expandedWatchdogTimer;
+        private DispatcherTimer _voiceSilenceTimer;
         private DispatcherTimer _eyeBlinkTimer;
         private DispatcherTimer _soundwaveTimer;
 
@@ -177,6 +178,17 @@ namespace AntigravityIsland.UI
                 {
                     _expandedWatchdogTimer.Stop();
                     CollapseToPillClean();
+                }
+            };
+
+            // 5. Temporizador de silêncio para auto-envio da fala
+            _voiceSilenceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1600) };
+            _voiceSilenceTimer.Tick += (s, e) =>
+            {
+                _voiceSilenceTimer.Stop();
+                if (_voiceInputBox.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(_voiceInputBox.Text))
+                {
+                    SubmitVoiceCommand(_voiceInputBox.Text);
                 }
             };
 
@@ -531,11 +543,25 @@ namespace AntigravityIsland.UI
                 if (e.Key == Key.Enter)
                 {
                     e.Handled = true;
+                    _voiceSilenceTimer.Stop();
                     SubmitVoiceCommand(_voiceInputBox.Text);
                 }
                 else if (e.Key == Key.Escape)
                 {
+                    _voiceSilenceTimer.Stop();
                     _voiceInputBox.Visibility = Visibility.Collapsed;
+                    IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                    NativeWin32.MakeNonActivating(hwnd);
+                }
+            };
+            _voiceInputBox.TextChanged += (s, e) =>
+            {
+                if (_voiceInputBox.Visibility == Visibility.Visible && !string.IsNullOrWhiteSpace(_voiceInputBox.Text))
+                {
+                    // Reinicia o temporizador de silêncio a cada nova palavra ditada
+                    _voiceSilenceTimer.Stop();
+                    _voiceSilenceTimer.Interval = TimeSpan.FromMilliseconds(1600);
+                    _voiceSilenceTimer.Start();
                 }
             };
             Grid.SetRow(_voiceInputBox, 2);
@@ -872,32 +898,74 @@ namespace AntigravityIsland.UI
         // =========================================================================
         private void StartVoiceInputMode()
         {
+            if (_voiceAgent != null && _voiceAgent.IsSpeaking)
+            {
+                _voiceAgent.StopSpeaking();
+            }
+
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+
+            // 1. Remove temporariamente o estilo WS_EX_NOACTIVATE para a janela receber foco real
+            int exStyle = NativeWin32.GetWindowLong(hwnd, NativeWin32.GWL_EXSTYLE);
+            exStyle &= ~NativeWin32.WS_EX_NOACTIVATE;
+            NativeWin32.SetWindowLong(hwnd, NativeWin32.GWL_EXSTYLE, exStyle);
+
+            // 2. Traz a janela para primeiro plano com Alt-bypass
+            NativeWin32.ActivateWindowWithAltBypass(hwnd);
+
             _voiceInputBox.Visibility = Visibility.Visible;
             _voiceInputBox.Text = "";
             _voiceInputBox.Focus();
+            Keyboard.Focus(_voiceInputBox);
 
             _terminalCodeLine1.Text = "$ agy (escutando voz...)";
-            _terminalCodeLine2.Text = "Fale seu comando ou digite (Enter para enviar)";
+            _terminalCodeLine2.Text = "Fale agora... (o envio será automático quando você terminar)";
 
-            _agentStatusText.Text = "\uD83C\uDF99 Ouvindo voce...";
+            _agentStatusText.Text = "\uD83C\uDF99 Ouvindo você...";
             _agentStatusLamp.Fill = new SolidColorBrush(Color.FromRgb(59, 130, 246));
 
-            // Aciona o microfone/ditado nativo do Windows (Win + H)
-            VoiceAgent.TriggerWindowsVoiceDictation();
+            // 3. Dispara o ditado nativo (Win + H) garantindo foco no campo de texto da ilha
+            DispatcherTimer startTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
+            startTimer.Tick += (s, e) =>
+            {
+                startTimer.Stop();
+                _voiceInputBox.Focus();
+                Keyboard.Focus(_voiceInputBox);
+                VoiceAgent.TriggerWindowsVoiceDictation();
+            };
+            startTimer.Start();
         }
 
         private async void SubmitVoiceCommand(string prompt)
         {
             if (string.IsNullOrWhiteSpace(prompt)) return;
 
+            _voiceSilenceTimer.Stop();
             _voiceInputBox.Visibility = Visibility.Collapsed;
-            SetState(AgentStatus.Thinking, "Antigravity pensando...");
+
+            // Restaura o modo no-activate para não roubar foco de outras janelas
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            NativeWin32.MakeNonActivating(hwnd);
+
+            // Se o usuário mencionar a tela, captura contexto visual automaticamente
+            string lowerPrompt = prompt.ToLower();
+            if (lowerPrompt.Contains("tela") || lowerPrompt.Contains("print") || lowerPrompt.Contains("screenshot") || lowerPrompt.Contains("veja") || lowerPrompt.Contains("olha"))
+            {
+                try
+                {
+                    string screenPath = ScreenCapture.Capture(false);
+                    prompt += string.Format(" (Contexto visual da tela capturado em: {0})", screenPath);
+                }
+                catch { }
+            }
+
+            SetState(AgentStatus.Thinking, "Gemini pensando...");
             _terminalCodeLine1.Text = string.Format("$ agy -p \"{0}\"", prompt);
-            _terminalCodeLine2.Text = "Consultando o Antigravity CLI...";
+            _terminalCodeLine2.Text = "Consultando seu Gemini Pro no Antigravity CLI...";
 
             string answer = await AntigravityCli.RunPromptAsync(prompt, true);
 
-            SetState(AgentStatus.Idle, "Antigravity respondeu");
+            SetState(AgentStatus.Idle, "Gemini respondeu");
             _terminalCodeLine2.Text = answer;
 
             // Robo fala a resposta em voz alta com sintetizador natural!
