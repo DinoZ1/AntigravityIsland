@@ -73,6 +73,8 @@ namespace AntigravityIsland.UI
         private int _focusRemainingSeconds = 25 * 60; // 25:00
         private bool _focusRunning = false;
         private bool _isExpanded = false;
+        private bool _isVoiceActive = false;
+        private DateTime _lastHotkeyTime = DateTime.MinValue;
         private string _pendingScreenCapture = null;
 
         private Action<bool, string> _currentPermissionCallback;
@@ -106,7 +108,7 @@ namespace AntigravityIsland.UI
             KeyDown += IslandWindow_KeyDown;
             Deactivated += (s, e) =>
             {
-                if (_isExpanded)
+                if (_isExpanded && !_isVoiceActive)
                 {
                     _autoCollapseTimer.Stop();
                     _expandedWatchdogTimer.Stop();
@@ -168,6 +170,14 @@ namespace AntigravityIsland.UI
         {
             if (msg == NativeWin32.WM_HOTKEY)
             {
+                // Debounce de 450ms para evitar duplo disparo se a tecla for mantida
+                if ((DateTime.Now - _lastHotkeyTime).TotalMilliseconds < 450)
+                {
+                    handled = true;
+                    return IntPtr.Zero;
+                }
+                _lastHotkeyTime = DateTime.Now;
+
                 int hotkeyId = wParam.ToInt32();
                 if (hotkeyId == 1001 || hotkeyId == 1003)
                 {
@@ -191,19 +201,27 @@ namespace AntigravityIsland.UI
                 if (_voiceAgent != null && _voiceAgent.IsSpeaking)
                 {
                     _voiceAgent.StopSpeaking();
+                    _isVoiceActive = false;
+                    AnimateToPill();
                     return;
                 }
 
-                // Se a caixa de voz já estiver aberta, cancela e recolhe a ilha
-                if (_voiceInputBox.Visibility == Visibility.Visible)
+                // Se a caixa de voz já estiver aberta e o usuário apertar novamente após falar, cancela
+                if (_isVoiceActive && _voiceInputBox.Visibility == Visibility.Visible && string.IsNullOrWhiteSpace(_voiceInputBox.Text))
                 {
                     _voiceSilenceTimer.Stop();
+                    _isVoiceActive = false;
                     _voiceInputBox.Visibility = Visibility.Collapsed;
                     IntPtr hwnd = new WindowInteropHelper(this).Handle;
                     NativeWin32.MakeNonActivating(hwnd);
                     AnimateToPill();
                     return;
                 }
+
+                // Marca a sessão de voz como ativa para impedir qualquer fechamento automático
+                _isVoiceActive = true;
+                _autoCollapseTimer.Stop();
+                _expandedWatchdogTimer.Stop();
 
                 AnimateToDashboard();
 
@@ -213,7 +231,7 @@ namespace AntigravityIsland.UI
                     {
                         _pendingScreenCapture = ScreenCapture.Capture(false);
                         _terminalCodeLine1.Text = "$ agy (🎮 Game Assistant)";
-                        _terminalCodeLine2.Text = "Tela do jogo capturada! Fale sua dúvida sobre o jogo...";
+                        _terminalCodeLine2.Text = "Tela capturada! Fale sua dúvida sobre o jogo...";
                     }
                     catch
                     {
@@ -226,7 +244,7 @@ namespace AntigravityIsland.UI
                 {
                     _pendingScreenCapture = null;
                     _terminalCodeLine1.Text = "$ agy (🎮 In-Game Voice)";
-                    _terminalCodeLine2.Text = "Ouvindo você... (o envio será automático)";
+                    _terminalCodeLine2.Text = "Ouvindo você... (fale agora)";
                 }
 
                 StartVoiceInputMode();
@@ -264,7 +282,7 @@ namespace AntigravityIsland.UI
             _autoCollapseTimer.Tick += (s, e) =>
             {
                 _autoCollapseTimer.Stop();
-                if (_isExpanded && !_islandBorder.IsMouseOver)
+                if (_isExpanded && !_isVoiceActive && !_islandBorder.IsMouseOver)
                 {
                     CollapseToPillClean();
                 }
@@ -274,7 +292,7 @@ namespace AntigravityIsland.UI
             _expandedWatchdogTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
             _expandedWatchdogTimer.Tick += (s, e) =>
             {
-                if (_isExpanded && !_islandBorder.IsMouseOver)
+                if (_isExpanded && !_isVoiceActive && !_islandBorder.IsMouseOver)
                 {
                     _expandedWatchdogTimer.Stop();
                     CollapseToPillClean();
@@ -369,9 +387,12 @@ namespace AntigravityIsland.UI
 
             _islandBorder.MouseLeave += (s, e) =>
             {
-                _autoCollapseTimer.Stop();
-                _autoCollapseTimer.Interval = TimeSpan.FromMilliseconds(120);
-                _autoCollapseTimer.Start();
+                if (!_isVoiceActive)
+                {
+                    _autoCollapseTimer.Stop();
+                    _autoCollapseTimer.Interval = TimeSpan.FromMilliseconds(120);
+                    _autoCollapseTimer.Start();
+                }
             };
 
             _islandBorder.MouseLeftButtonDown += (s, e) =>
@@ -649,9 +670,11 @@ namespace AntigravityIsland.UI
                 else if (e.Key == Key.Escape)
                 {
                     _voiceSilenceTimer.Stop();
+                    _isVoiceActive = false;
                     _voiceInputBox.Visibility = Visibility.Collapsed;
                     IntPtr hwnd = new WindowInteropHelper(this).Handle;
                     NativeWin32.MakeNonActivating(hwnd);
+                    AnimateToPill();
                 }
             };
             _voiceInputBox.TextChanged += (s, e) =>
@@ -997,6 +1020,10 @@ namespace AntigravityIsland.UI
         // =========================================================================
         private void StartVoiceInputMode()
         {
+            _isVoiceActive = true;
+            _autoCollapseTimer.Stop();
+            _expandedWatchdogTimer.Stop();
+
             if (_voiceAgent != null && _voiceAgent.IsSpeaking)
             {
                 _voiceAgent.StopSpeaking();
@@ -1211,6 +1238,7 @@ namespace AntigravityIsland.UI
 
         private void CollapseToPillClean()
         {
+            if (_isVoiceActive) return;
             if (_voiceInputBox != null)
             {
                 _voiceInputBox.Visibility = Visibility.Collapsed;
@@ -1223,7 +1251,7 @@ namespace AntigravityIsland.UI
         {
             if (_isExpanded) return;
             _isExpanded = true;
-            _expandedWatchdogTimer.Start();
+            if (!_isVoiceActive) _expandedWatchdogTimer.Start();
 
             Duration duration = new Duration(TimeSpan.FromMilliseconds(240));
             CubicEase ease = new CubicEase { EasingMode = EasingMode.EaseOut };
