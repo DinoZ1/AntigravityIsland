@@ -58,6 +58,7 @@ namespace AntigravityIsland.UI
         private TextBlock _spotifyTrackText;
         private TextBlock _spotifyStatusText;
         private TextBlock _pillStatusText;
+        private TextBlock _voiceNameSubText;
         private Ellipse _pillLamp;
 
         // Timers internos
@@ -737,15 +738,15 @@ namespace AntigravityIsland.UI
                 Background = new SolidColorBrush(Color.FromRgb(168, 85, 247)),
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(0, 0, 10, 0),
-                Child = new TextBlock { Text = "\u2699", FontSize = 18, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                Child = new TextBlock { Text = "\uD83C\uDF99", FontSize = 18, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
             };
             Grid.SetColumn(settingsIcon, 0);
 
             StackPanel settingsTexts = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-            TextBlock settingsTitle = new TextBlock { Text = "Settings", Foreground = Brushes.White, FontWeight = FontWeights.Bold, FontSize = 13 };
-            TextBlock settingsSub = new TextBlock { Text = "\uD83D\uDCF7 Print · \u2197 CLI", Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)), FontSize = 11 };
+            TextBlock settingsTitle = new TextBlock { Text = "Voz Neural", Foreground = Brushes.White, FontWeight = FontWeights.Bold, FontSize = 13 };
+            _voiceNameSubText = new TextBlock { Text = _voiceAgent.VoiceDisplayName, Foreground = new SolidColorBrush(Color.FromArgb(160, 255, 255, 255)), FontSize = 11 };
             settingsTexts.Children.Add(settingsTitle);
-            settingsTexts.Children.Add(settingsSub);
+            settingsTexts.Children.Add(_voiceNameSubText);
             Grid.SetColumn(settingsTexts, 1);
 
             settingsContent.Children.Add(settingsIcon);
@@ -753,10 +754,9 @@ namespace AntigravityIsland.UI
             settingsCard.Child = settingsContent;
             settingsCard.MouseLeftButtonDown += (s, e) =>
             {
-                if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift))
-                    FocusTerminal();
-                else
-                    CaptureScreenContext();
+                _voiceAgent.ToggleVoice();
+                _voiceNameSubText.Text = _voiceAgent.VoiceDisplayName;
+                _voiceAgent.SpeakAsync("Voz alterada para " + _voiceAgent.VoiceDisplayName);
             };
             Grid.SetRow(settingsCard, 1);
 
