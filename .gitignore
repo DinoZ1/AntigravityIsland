@@ -1,0 +1,6 @@
+# Logs & Temporarios
+*.log
+*.tmp
+.vs/
+bin/
+obj/

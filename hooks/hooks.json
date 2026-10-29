@@ -1,0 +1,43 @@
+{
+  "antigravity-dynamic-island": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/thiag/OneDrive/Anexos/Área de Trabalho/jijio/AntigravityIsland/hooks/agy-island-bridge.js\" PreToolUse",
+            "timeout": 305
+          }
+        ]
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "node \"C:/Users/thiag/OneDrive/Anexos/Área de Trabalho/jijio/AntigravityIsland/hooks/agy-island-bridge.js\" PreInvocation",
+        "timeout": 5
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"C:/Users/thiag/OneDrive/Anexos/Área de Trabalho/jijio/AntigravityIsland/hooks/agy-island-bridge.js\" PostToolUse",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node \"C:/Users/thiag/OneDrive/Anexos/Área de Trabalho/jijio/AntigravityIsland/hooks/agy-island-bridge.js\" Stop",
+        "timeout": 10
+      }
+    ]
+  }
+}
